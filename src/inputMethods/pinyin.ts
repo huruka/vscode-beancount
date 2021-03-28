@@ -1,5 +1,5 @@
-import { InputMethod } from './inputMethod';
-import { readFileSync } from 'fs';
+import {InputMethod} from './inputMethod';
+import {readFileSync} from 'fs';
 
 export class Pinyin implements InputMethod {
   private _pyData: Map<string, string>;
@@ -15,7 +15,7 @@ export class Pinyin implements InputMethod {
   }
 
   getLetterRepresentation(w: string): string {
-    const result = new Array<string>();
+    const result = [];
     for (let i = 0; i < w.length; i += 1) {
       const r = this._pyData.get(w[i]) || '';
       if (r.length === 0) {

@@ -1,67 +1,78 @@
 'use strict';
 import * as vscode from 'vscode';
 // import { chdir } from 'process';
-import { existsSync } from 'fs';
-import { isAbsolute, join } from 'path';
-import { FavaManager } from './favaManager';
-import { ActionProvider } from './actionProvider';
-import { Completer } from './completer';
-import { Formatter } from './formatter';
-import { run_cmd } from './utils';
+import {existsSync} from 'fs';
+import {isAbsolute, join} from 'path';
+import {FavaManager} from './favaManager';
+import {ActionProvider} from './actionProvider';
+import {Completer} from './completer';
+import {Formatter} from './formatter';
+import {runCmd} from './utils';
 
 export function activate(context: vscode.ExtensionContext) {
   const extension = new Extension(context);
 
   vscode.commands.registerCommand('beancount.runFava', () =>
-    extension.favaManager.openFava(true)
+    extension.favaManager.openFava(true),
   );
 
   context.subscriptions.push(
-    vscode.window.onDidCloseTerminal((terminal: vscode.Terminal) => {
-      if (terminal.name === 'Fava') {
-        extension.favaManager.onDidCloseTerminal();
-      }
-    })
+      vscode.window.onDidCloseTerminal((terminal: vscode.Terminal) => {
+        if (terminal.name === 'Fava') {
+          extension.favaManager.onDidCloseTerminal();
+        }
+      }),
   );
 
   context.subscriptions.push(
-    vscode.languages.registerCompletionItemProvider(
-      { scheme: 'file', language: 'beancount' },
-      extension.completer,
-      '2',
-      '#',
-      '^',
-      '"'
-    )
+      vscode.languages.registerCompletionItemProvider(
+          {scheme: 'file', language: 'beancount'},
+          extension.completer,
+          '2',
+          '#',
+          '^',
+          '"',
+      ),
   );
   context.subscriptions.push(
-    vscode.languages.registerHoverProvider(
-      { scheme: 'file', language: 'beancount' },
-      extension.completer
-    )
+      vscode.languages.registerHoverProvider(
+          {scheme: 'file', language: 'beancount'},
+          extension.completer,
+      ),
   );
   context.subscriptions.push(
-    vscode.languages.registerCodeActionsProvider(
-      { scheme: 'file', language: 'beancount' },
-      extension.actionProvider
-    )
+      vscode.languages.registerCodeActionsProvider(
+          {scheme: 'file', language: 'beancount'},
+          extension.actionProvider,
+      ),
   );
   context.subscriptions.push(
-    vscode.workspace.onDidChangeTextDocument(
-      (e: vscode.TextDocumentChangeEvent) =>
-        extension.formatter.instantFormat(e)
-    )
+      vscode.workspace.onDidChangeTextDocument(
+          (e: vscode.TextDocumentChangeEvent) =>
+            extension.formatter.instantFormat(e),
+      ),
   );
   context.subscriptions.push(
-    vscode.workspace.onDidSaveTextDocument((e: vscode.TextDocument) =>
-      extension.refreshData(context)
-    )
+      vscode.workspace.onDidSaveTextDocument((e: vscode.TextDocument) =>
+        extension.refreshData(context),
+      ),
   );
+
   context.subscriptions.push(
-    vscode.workspace.onDidChangeConfiguration(
-      (e: vscode.ConfigurationChangeEvent) =>
-        extension.configurationUpdated(e, context)
-    )
+      vscode.workspace.onDidCloseTextDocument((e: vscode.TextDocument) =>
+        extension.textDocumentClosed(e)),
+  );
+
+  context.subscriptions.push(
+      vscode.workspace.onDidOpenTextDocument((e: vscode.TextDocument) =>
+        extension.textDocumentOpened(e, context)),
+  );
+
+  context.subscriptions.push(
+      vscode.workspace.onDidChangeConfiguration(
+          (e: vscode.ConfigurationChangeEvent) =>
+            extension.configurationUpdated(e, context),
+      ),
   );
 
   extension.refreshData(context);
@@ -70,7 +81,7 @@ export function activate(context: vscode.ExtensionContext) {
   }
 }
 
-export function deactivate() {}
+export function deactivate() { }
 
 export class Extension {
   completer: Completer;
@@ -88,23 +99,23 @@ export class Extension {
     this.actionProvider = new ActionProvider();
     this.favaManager = new FavaManager(this);
     this.diagnosticCollection = vscode.languages.createDiagnosticCollection(
-      'Beancount'
+        'Beancount',
     );
     this.formatter = new Formatter();
     this.logger = vscode.window.createOutputChannel('Beancount');
     this.flagWarnings = vscode.workspace.getConfiguration('beancount')[
-      'flagWarnings'
+        'flagWarnings'
     ];
   }
 
   getMainBeanFile(): string {
     this.logger.append('try finding a valid bean file...');
     const mainBeanFile = vscode.workspace
-      .getConfiguration('beancount')
-      .get('mainBeanFile');
+        .getConfiguration('beancount')
+        .get('mainBeanFile');
     if (mainBeanFile === undefined || mainBeanFile === '') {
       this.logger.append(
-        'user did not specify a main bean file in settings...'
+          'user did not specify a main bean file in settings...',
       );
       if (
         vscode.window.activeTextEditor !== undefined &&
@@ -119,18 +130,18 @@ export class Extension {
     } else {
       if (isAbsolute(String(mainBeanFile))) {
         this.logger.appendLine(
-          'user specified a main bean file with an absolute path.'
+            'user specified a main bean file with an absolute path.',
         );
         return String(mainBeanFile);
       } else {
         this.logger.append(
-          'user specified a main bean file with a relative path...'
+            'user specified a main bean file with a relative path...',
         );
         if (vscode.workspace.workspaceFolders) {
           this.logger.appendLine('');
           return join(
-            vscode.workspace.workspaceFolders[0].uri.fsPath,
-            String(mainBeanFile)
+              vscode.workspace.workspaceFolders[0].uri.fsPath,
+              String(mainBeanFile),
           );
         } else {
           this.logger.appendLine('but there are no workspace folders.');
@@ -140,11 +151,11 @@ export class Extension {
     }
   }
 
-  refreshData(context: vscode.ExtensionContext) {
-    const mainBeanFile = this.getMainBeanFile();
+  refreshData(context: vscode.ExtensionContext, mainFile?: string) {
+    const mainBeanFile = mainFile ?? this.getMainBeanFile();
     const checkpy = context.asAbsolutePath('/pythonFiles/beancheck.py');
     const python3Path = vscode.workspace.getConfiguration('beancount')[
-      'python3Path'
+        'python3Path'
     ];
     if (mainBeanFile.length === 0 || !existsSync(mainBeanFile)) {
       this.logger.appendLine('find no valid bean files.');
@@ -157,38 +168,61 @@ export class Extension {
       pyArgs.push('--payeeNarration');
     }
     this.logger.appendLine(
-      `running ${python3Path} ${pyArgs} to refresh data...`
+        `running ${python3Path} ${pyArgs} to refresh data...`,
     );
-    const cwd = vscode.workspace.workspaceFolders
-      ? vscode.workspace.workspaceFolders[0].uri.fsPath
-      : undefined;
-    run_cmd(
-      python3Path,
-      pyArgs,
-      (text: string) => {
-        const errorsCompletions = text.split('\n', 3);
-        this.provideDiagnostics(errorsCompletions[0], errorsCompletions[2]);
-        this.completer.updateData(errorsCompletions[1]);
-        this.logger.appendLine('Data refreshed.');
-      },
-      cwd ? { cwd } : undefined,
-      str => this.logger.append(str)
+    runCmd(
+        python3Path,
+        pyArgs,
+        (text: string) => {
+          const errorsCompletions = text.split('\n', 3);
+          this.provideDiagnostics(errorsCompletions[0], errorsCompletions[2]);
+          this.completer.updateData(errorsCompletions[1]);
+          this.logger.appendLine('Data refreshed.');
+        },
+        (str) => this.logger.append(str),
     );
+  }
+
+  textDocumentOpened(
+      e: vscode.TextDocument,
+      context: vscode.ExtensionContext,
+  ) {
+    if (e.languageId !== 'beancount') {
+      return;
+    }
+    const mainBeanFile = vscode.workspace
+        .getConfiguration('beancount')
+        .get('mainBeanFile');
+    if (mainBeanFile === undefined || mainBeanFile === '') {
+      this.refreshData(context, e.fileName);
+    }
+  }
+
+  textDocumentClosed(e: vscode.TextDocument) {
+    if (e.languageId !== 'beancount') {
+      return;
+    }
+    const mainBeanFile = vscode.workspace
+        .getConfiguration('beancount')
+        .get('mainBeanFile');
+    if (mainBeanFile === undefined || mainBeanFile === '') {
+      this.diagnosticCollection.set(e.uri, undefined);
+    }
   }
 
   provideDiagnostics(errorsJson: string, flagsJson: string) {
     const errors: BeancountError[] = JSON.parse(errorsJson);
     const flags: BeancountFlag[] = JSON.parse(flagsJson);
     const diagsCollection: { [key: string]: vscode.Diagnostic[] } = {};
-    errors.forEach(e => {
+    errors.forEach((e) => {
       const range = new vscode.Range(
-        new vscode.Position(Math.max(e.line - 1, 0), 0),
-        new vscode.Position(Math.max(e.line, 1), 0)
+          new vscode.Position(Math.max(e.line - 1, 0), 0),
+          new vscode.Position(Math.max(e.line, 1), 0),
       );
       const diag = new vscode.Diagnostic(
-        range,
-        e.message,
-        vscode.DiagnosticSeverity.Error
+          range,
+          e.message,
+          vscode.DiagnosticSeverity.Error,
       );
       diag.source = 'Beancount';
       diag.code = DIAGNOSTIC_CODES.error;
@@ -197,14 +231,14 @@ export class Extension {
       }
       diagsCollection[e.file].push(diag);
     });
-    flags.forEach(f => {
+    flags.forEach((f) => {
       const warningType = this.flagWarnings[f.flag];
       if (warningType === null || warningType === undefined) {
         return;
       }
       const range = new vscode.Range(
-        new vscode.Position(Math.max(f.line - 1, 0), 0),
-        new vscode.Position(Math.max(f.line, 1), 0)
+          new vscode.Position(Math.max(f.line - 1, 0), 0),
+          new vscode.Position(Math.max(f.line, 1), 0),
       );
       const diag = new FlagDiagnostic(f.flag, range, f.message, warningType);
       diag.source = 'Beancount';
@@ -217,19 +251,19 @@ export class Extension {
     const mainBeanFile = this.getMainBeanFile();
     for (const file of Object.keys(diagsCollection)) {
       this.diagnosticCollection.set(
-        vscode.Uri.file(existsSync(file) ? file : mainBeanFile),
-        diagsCollection[file]
+          vscode.Uri.file(existsSync(file) ? file : mainBeanFile),
+          diagsCollection[file],
       );
     }
   }
 
   configurationUpdated(
-    e: vscode.ConfigurationChangeEvent,
-    context: vscode.ExtensionContext
+      e: vscode.ConfigurationChangeEvent,
+      context: vscode.ExtensionContext,
   ) {
     if (e.affectsConfiguration('beancount.flagWarnings')) {
       this.flagWarnings = vscode.workspace.getConfiguration('beancount')[
-        'flagWarnings'
+          'flagWarnings'
       ];
     }
     if (
@@ -247,10 +281,10 @@ export class FlagDiagnostic extends vscode.Diagnostic {
   flag: string;
 
   constructor(
-    flag: string,
-    range: vscode.Range,
-    message: string,
-    severity?: vscode.DiagnosticSeverity
+      flag: string,
+      range: vscode.Range,
+      message: string,
+      severity?: vscode.DiagnosticSeverity,
   ) {
     super(range, message, severity);
     this.flag = flag;
